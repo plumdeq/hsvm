@@ -15,6 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Third-party imports
+import numpy as np
 import torch
 
 def mink_prod(x, y):
@@ -24,12 +25,21 @@ def mink_prod(x, y):
     Assume x, y come in batch mode
 
     """
-    head = torch.mul(x[:,0], y[:,0])
-    logger.info(head)
+    if len(x.shape) < 2:
+        x = x.reshape(1, -1)
+    if len(y.shape) < 2:
+        y = y.reshape(1, -1)
+    # head = torch.mul(x[:,0], y[:,0])
+    # logger.info(head)
 
-    rest = torch.sum(torch.mul(x, y), 1)
+    # rest = torch.sum(torch.mul(x, y), 1)
 
-    return head - rest
+    # return head - rest
+
+    mink_x = x.copy()
+    mink_x[:, 1:] = -mink_x[:, 1:]
+
+    return np.sum(mink_x * y, 1).reshape(-1, 1)
 
 
 def ball2loid(b):
@@ -37,11 +47,15 @@ def ball2loid(b):
     Convert from poincare ball coordinates to hyperboloid
 
     """
-    x0 = 2. / (1 - torch.sum(torch.mul(b, b), 1)) - 1
-    x0 = x0.view(-1, 1)
-    bx0 = torch.mul(b, (x0+1))
+    x0 = 2. / (1 - np.sum(b**2, 1)) - 1
+    x0 = x0.reshape(-1, 1)
+    bx0 = b * (x0+1)
 
-    return torch.cat((x0, bx0), dim=1)
+    res = np.empty((bx0.shape[0], bx0.shape[1]+1))
+    res[:, 0] = x0.ravel()
+    res[:, 1:] = bx0
+
+    return res
 
 
 def loid2ball(l):
@@ -51,6 +65,43 @@ def loid2ball(l):
     """
     head = l[:,1:]
     rest = 1 + l[:, 0]
-    rest = rest.view(-1, 1)
+    rest = rest.reshape(-1, 1)
 
-    return torch.div(head, rest)
+    return np.divide(head, rest)
+
+
+def obj_fn(w, x, y, C):
+    if len(y.shape) < 2:
+        y = y.reshape(-1, 1)
+
+    margin_term = mink_prod(w, w)
+    misclass_term = np.arcsinh(1) - np.arcsinh(y * mink_prod(x, w))
+    obj = margin_term + C * np.sum(misclass_term)
+
+    return obj.ravel()
+
+
+def grad_fn(w, x, y, C):
+    if len(y.shape) < 2:
+        y = y.reshape(-1, 1)
+
+    w_grad_margin = w.copy()
+    w_grad_margin[0] = -1. * w_grad_margin[0]
+    z = y * mink_prod(x, w)
+    missed = (np.arcsinh(1) -np.arcsinh(z)) > 0
+    x_grad_misclass = x
+    x_grad_misclass[:, 1:] = -1. * x_grad_misclass[:, 1:]
+
+    w_grad_misclass = missed * -(1. / np.sqrt(1 + z**2)) * y  * x_grad_misclass
+
+    w_grad = w_grad_margin + C * np.sum(w_grad_misclass, 0)
+
+    return w_grad
+
+
+def is_feasible(w):
+    """
+    Mink prod of weights should be less than 0
+
+    """
+    return (mink_prod(w, w) < 1).ravel().item()

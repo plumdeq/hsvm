@@ -11,9 +11,12 @@ import torch.nn as nn
 
 class HSVM(nn.Module):
     """Hyperboloid lives in n+1 dimensions"""
-    def __init__(self):
+    def __init__(self, n, mode='hyperbolic'):
         super(HSVM, self).__init__()
-        self.fc = nn.Linear(3, 1)
+        if mode == 'hyperbolic':
+            n = n + 1
+
+        self.fc = nn.Linear(n, 1)
 
     def forward(self, x):
         h = self.fc(x)
