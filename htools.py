@@ -74,7 +74,7 @@ def obj_fn(w, x, y, C):
     if len(y.shape) < 2:
         y = y.reshape(-1, 1)
 
-    margin_term = mink_prod(w, w)
+    margin_term = -mink_prod(w, w)/2.0
     misclass_term = np.arcsinh(1) - np.arcsinh(y * mink_prod(x, w))
     obj = margin_term + C * np.sum(misclass_term)
 
