@@ -118,12 +118,27 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
         return w
 
 
+    def score(self, X, y):
+        """
+        Return mean accuracy evaluated on X, y
+
+        """
+        check_is_fitted(self, ['coef_'])
+        check_X_y(X, y)
+
+        preds = self.decision_function(X)
+        y_true = y.ravel()
+        correct = sum((y_true * preds) > 0)
+
+
+        return correct/len(y_true)
+
+
     def predict(self, X):
         """
         Predict class labels
 
         """
-        logger.info('calling predict')
         check_is_fitted(self, ['coef_'])
         X = check_array(X)
 

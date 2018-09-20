@@ -22,16 +22,23 @@ logger = logging.getLogger(__name__)
 # Third-party imports
 import click
 from tqdm import tqdm
+#
 import numpy as np
 import scipy as sp
 import scipy.optimize
+#
 from sklearn.metrics import roc_auc_score
+from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LogisticRegression
+from sklearn.svm import LinearSVC
+#
 import torch
 import torch.optim as optim
 
 # Cross-library imports
 from model import HSVM
 import htools
+import hsvm
 
 
 class KGEvaluator(object):
@@ -133,13 +140,16 @@ class KGEvaluator(object):
             X_tr, y_tr, tr_miss_ratio = self.convert_data(train_file, E, binary_op=binary_op) 
             X_te, y_te, te_miss_ratio = self.convert_data(test_file, E, binary_op=binary_op) 
 
+            logger.info('prepare data for euclidean SVM')
             data = (X_tr, X_te, y_tr, y_te)
+            logger.info('prepare data for hyperbolic SVM')
+            data_loid = (htools.ball2loid(X_tr), htools.ball2loid(X_te), y_tr, y_te)
 
             logger.info('euclidean SVM')
             self.eval_euc_svm(data, params)
 
             logger.info('hyperbolic SVM')
-            self.eval_hyper_svm(data, params)
+            self.eval_hyper_svm(data_loid, params)
 
 
             # elif classifier_type == "mlp": 
@@ -174,60 +184,19 @@ class KGEvaluator(object):
 
     def eval_euc_svm(self, data, params):
         """Evaluate euclidean SVM on given data"""
-        X_tr, X_te, Y_tr, Y_te = [torch.from_numpy(x) for x in data]
-        X_tr, X_te = X_tr.float(), X_te.float()
-        Y_tr, Y_te = Y_tr.float(), Y_te.float()
+        X_tr, X_te, Y_tr, Y_te = data
         Y_tr[Y_tr == 0] = -1.0
         Y_te[Y_te == 0] = -1.0
-        model = HSVM(10, mode='euclidean')
 
-        if torch.cuda.is_available():
-            model.cuda()
+        logger.info('CV on train data')
+        euc_SVM = LinearSVC(C=params['C'], max_iter=params['epochs'])
+        scores = cross_val_score(euc_SVM, X_tr, Y_tr, scoring='accuracy')
+        logger.info('{}'.format(scores))
 
-        N = len(Y_tr)
-        optimizer = optim.Adam(model.parameters(), lr=params['lr'])
-
-        model.train()
-        for e in tqdm(range(params['epoch'])):
-            perm = torch.randperm(N)
-            sum_loss = 0
-            acc_i = 0.0
-
-            for i in tqdm(range(0, N, params['batch_size'])):
-                x = X_tr[perm[i:i+params['batch_size']]]
-                y = Y_tr[perm[i:i+params['batch_size']]]
-
-                if torch.cuda.is_available():
-                    x = x.cuda()
-                    y = y.cuda()
-
-                optimizer.zero_grad()
-                output = model(x)
-
-                loss = torch.mean(torch.clamp(1 - output * y, min=0))
-                loss += params['c'] * torch.mean(model.fc.weight ** 2)
-                loss.backward()
-                optimizer.step()
-
-                sum_loss += loss.item()
-
-                y_true_i = y.cpu().numpy().ravel()
-                preds_i = output.data.cpu().numpy().ravel()
-
-                correct_i = sum((preds_i * y_true_i) > 0)
-                acc_i += correct_i
-
-            logger.info('train loss {}, acc {}'.format(sum_loss, acc_i/len(Y_tr)))
-
-        model.eval()
-
-        y_true = Y_te.data.cpu().numpy().ravel()
-        preds = model(X_te.cuda()).data.cpu().numpy().ravel()
-
-        correct = sum((preds * y_true) > 0)
-        auc = roc_auc_score(y_true, preds)
-        logger.info('test: acc {} auc {}'.format(correct/len(Y_te), auc))
-
+        euc_SVM.fit(X_tr, Y_tr)
+        te_score = euc_SVM.score(X_te, Y_te)
+        te_auc = roc_auc_score(Y_te, euc_SVM.decision_function(X_te))
+        logger.info('test accuracy {}, ROC AUC {}'.format(te_score, te_auc))
 
 
     def eval_hyper_svm(self, data, params):
@@ -239,72 +208,38 @@ class KGEvaluator(object):
         Y_tr[Y_tr == 0] = -1.0
         Y_te[Y_te == 0] = -1.0
 
-        N = len(Y_tr)
-        w = np.random.randn(10, )
-        lr = params['lr']
-        C = params['c']
-        not_feasible_counter = 0
+        logger.info('CV on train data')
+        hyp_SVM = hsvm.LinearHSVM(**params)
+        scores = cross_val_score(hyp_SVM, X_tr, Y_tr, scoring='accuracy')
+        logger.info('{}'.format(scores))
 
-        for e in tqdm(range(params['epoch'])):
-            perm = np.arange(N)
-            random.shuffle(perm)
-            sum_loss = 0
-            acc_i = 0.0
-
-            for i in tqdm(range(0, N, params['batch_size'])):
-                x = X_tr[perm[i:i+params['batch_size']]]
-                y = Y_tr[perm[i:i+params['batch_size']]]
-
-                grad = htools.grad_fn(w, x, y, C)
-                w = w - lr * grad
-
-                if not htools.is_feasible(w):
-                    # not_feasible_counter += 1
-                    # logger.info('not feasible ({} times)'.format(not_feasible_counter))
-                    res = sp.optimize.minimize_scalar(
-                        lambda alpha: np.sum((htools.project_weight(w, alpha) - w)**2))
-                    alpha = res.x
-                    w = htools.project_weight(w, alpha)
-
-                    assert htools.is_feasible(w)
-
-                obj = htools.obj_fn(w, x, y, C)
-                
-                sum_loss += obj.item()
-
-            y_true_tr = Y_tr.ravel()
-            preds_tr = htools.mink_prod(X_tr, w).ravel()
-
-            correct_tr = sum((preds_tr * y_true_tr) > 0)
-            logger.info('train loss {}, acc {}'.format(sum_loss, correct_tr/len(Y_tr)))
-
-        
-        y_true = Y_te.ravel()
-        preds = htools.mink_prod(X_te, w).ravel()
-        correct = sum((y_true * preds) > 0)
-        auc = roc_auc_score(y_true, preds)
-        logger.info('acc {} auc {}'.format(correct/len(Y_te), auc))
+        hyp_SVM.fit(X_tr, Y_tr)
+        te_score = hyp_SVM.score(X_te, Y_te)
+        te_auc = roc_auc_score(Y_te, hyp_SVM.decision_function(X_te))
+        logger.info('test accuracy {}, ROC AUC {}'.format(te_score, te_auc))
 
 
 @click.command()
 @click.argument('emb_path', type=click.Path(exists=True))
 @click.argument('tr_path', type=click.Path(exists=True))
 @click.argument('te_path', type=click.Path(exists=True))
-@click.option('--c', type=float, default=0.01)
-@click.option('--epoch', type=int, default=100)
+@click.option('--c', type=float, default=1.0)
+@click.option('--epochs', type=int, default=100)
 @click.option('--lr', type=float, default=0.01)
 @click.option('--batch-size', type=int, default=32)
-def main(emb_path, tr_path, te_path, c, epoch, lr, batch_size):
+@click.option('--pretrained', is_flag=True, default=False)
+def main(emb_path, tr_path, te_path, c, epochs, lr, batch_size, pretrained):
     """
     Args:
         emb_path - path to embedding file
 
     """
     params = {
-        'c': c,
-        'epoch': epoch,
+        'C': c,
+        'epochs': epochs,
         'lr': lr,
         'batch_size': batch_size,
+        'pretrained': pretrained,
     }
     my_evaluator = KGEvaluator()
     my_evaluator.evaluate_params(emb_path, tr_path, te_path, params)

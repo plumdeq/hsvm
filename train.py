@@ -358,22 +358,26 @@ def main(path, c, epochs, lr, batch_size, pretrained):
     logger.info('params {}'.format(params))
 
     # X, Y = get_ball_data()
-    X, Y = get_gaussian_data(path)
+    X, Y = get_gaussian_data(path, label1=3, label2=2)
     X_loid = htools.ball2loid(X)
     logger.info('converting from ball to loid {} -> {}'.format(X.shape, X_loid.shape))
     
     logger.info('logistic regression')
     log_regr = LogisticRegression(max_iter=epochs)
-    scores = cross_val_score(log_regr, X_loid, Y, scoring='roc_auc')
+    scores = cross_val_score(log_regr, X, Y, scoring='accuracy')
     logger.info('{}'.format(scores))
     logger.info('euclidean linear SVM')
     euc_SVM = LinearSVC(C=c, max_iter=epochs)
-    scores = cross_val_score(euc_SVM, X_loid, Y, scoring='roc_auc')
+    scores = cross_val_score(euc_SVM, X, Y, scoring='accuracy')
     logger.info('{}'.format(scores))
+    euc_SVM.fit(X, Y)
+    visualize(X, Y, euc_SVM.coef_.ravel())
     logger.info('hyperbolic linear SVM')
     hyp_SVM = hsvm.LinearHSVM(**params)
-    scores = cross_val_score(hyp_SVM, X_loid, Y, scoring='roc_auc')
+    scores = cross_val_score(hyp_SVM, X_loid, Y, scoring='accuracy')
     logger.info('{}'.format(scores))
+    hyp_SVM.fit(X_loid, Y)
+    visualize_loid(X, Y, hyp_SVM.coef_.ravel())
 
 
 if __name__ == '__main__':
