@@ -105,3 +105,16 @@ def is_feasible(w):
 
     """
     return (mink_prod(w, w) < 1).ravel().item()
+
+
+def project_weight(w, alpha, ep=1e-5):
+    """
+    This function can be minimized to find the smallest alpha, which projects
+    weights to the closest point so that w * w = -1 (minkowski)
+
+    """
+    new_w = w.copy()
+    new_w[1:] = (1 + alpha) * new_w[1:]
+    new_w[0] = np.sqrt(np.sum((new_w[1:] - ep)**2))
+
+    return new_w
