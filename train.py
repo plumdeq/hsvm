@@ -17,6 +17,10 @@ logger = logging.getLogger(__name__)
 import matplotlib.pyplot as plt
 from sklearn.metrics import roc_auc_score
 from sklearn.datasets.samples_generator import make_blobs
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.svm import LinearSVC
+from sklearn.model_selection import cross_val_score
+from sklearn.linear_model import LogisticRegression
 import numpy as np
 import scipy as sp
 import scipy.optimize
@@ -29,6 +33,7 @@ from tqdm import tqdm
 # Cross-library imports
 from model import HSVM
 import htools
+import hsvm
 
 
 def get_random_data():
@@ -312,7 +317,7 @@ def hyper_main(X_loid, Y, params):
 @click.option('--epoch', type=int, default=100)
 @click.option('--lr', type=float, default=0.01)
 @click.option('--batch-size', type=int, default=5)
-def main(path, c, epoch, lr, batch_size):
+def old_main(path, c, epoch, lr, batch_size):
     params = {
         'c': c,
         'epoch': epoch,
@@ -331,6 +336,44 @@ def main(path, c, epoch, lr, batch_size):
     euc_main(X_euc, Y_euc, params)
     logger.info('hyperbolic SVM')
     hyper_main(X_loid, Y, params)
+
+
+
+@click.command()
+@click.argument('path', type=click.Path(exists=True))
+@click.option('--c', type=float, default=1.0)
+@click.option('--epochs', type=int, default=100)
+@click.option('--lr', type=float, default=0.01)
+@click.option('--batch-size', type=int, default=16)
+@click.option('--pretrained', is_flag=True, default=False)
+def main(path, c, epochs, lr, batch_size, pretrained):
+    params = {
+        'C': c,
+        'epochs': epochs,
+        'lr': lr,
+        'batch_size': batch_size,
+        'pretrained': pretrained,
+    }
+
+    logger.info('params {}'.format(params))
+
+    # X, Y = get_ball_data()
+    X, Y = get_gaussian_data(path)
+    X_loid = htools.ball2loid(X)
+    logger.info('converting from ball to loid {} -> {}'.format(X.shape, X_loid.shape))
+    
+    logger.info('logistic regression')
+    log_regr = LogisticRegression(max_iter=epochs)
+    scores = cross_val_score(log_regr, X_loid, Y, scoring='roc_auc')
+    logger.info('{}'.format(scores))
+    logger.info('euclidean linear SVM')
+    euc_SVM = LinearSVC(C=c, max_iter=epochs)
+    scores = cross_val_score(euc_SVM, X_loid, Y, scoring='roc_auc')
+    logger.info('{}'.format(scores))
+    logger.info('hyperbolic linear SVM')
+    hyp_SVM = hsvm.LinearHSVM(**params)
+    scores = cross_val_score(hyp_SVM, X_loid, Y, scoring='roc_auc')
+    logger.info('{}'.format(scores))
 
 
 if __name__ == '__main__':

@@ -21,18 +21,19 @@ from sklearn.linear_model.base import LinearClassifierMixin
 from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
 from sklearn.svm import LinearSVC
+from sklearn.metrics import roc_auc_score
 
 # Cross-library imports
 import htools
 
 
-class HSVMClassifier(BaseEstimator, LinearClassifierMixin):
+class LinearHSVM(BaseEstimator, LinearClassifierMixin):
     """
     Hyperbolic SVM in the hyperboloid model
 
     """
     def __init__(self, C=1.0, epochs=1000, lr=0.001, batch_size=16,
-                 pretrain_linsvm=True, fit_intercept=False):
+                 pretrained=True, fit_intercept=False):
         args_dict = locals()
 
         for name, val in args_dict.items():
@@ -49,7 +50,7 @@ class HSVMClassifier(BaseEstimator, LinearClassifierMixin):
         """
         X, y = check_X_y(X, y)
 
-        if self.pretrain_linsvm:
+        if self.pretrained:
             logger.debug('pretraining with default linear svm')
             self.linsvm_ = LinearSVC(fit_intercept=self.fit_intercept).fit(X, y)
             self.coef_ = self.linsvm_.coef_
@@ -117,9 +118,30 @@ class HSVMClassifier(BaseEstimator, LinearClassifierMixin):
         return w
 
 
-    # def predict(self, X):
-    #     check_is_fitted(self, ['linsvm_', 'coef_', 'y_'])
+    def predict(self, X):
+        """
+        Predict class labels
 
-    #     X = check_array(X)
+        """
+        logger.info('calling predict')
+        check_is_fitted(self, ['coef_'])
+        X = check_array(X)
 
-    #     return self.linsvm_.predict(X)
+        preds = htools.mink_prod(X, self.coef_).ravel()
+        preds[preds >= 0] = 1
+        preds[preds < 0] = -1
+
+        return preds
+
+
+    def decision_function(self, X):
+        """
+        This function is used for ROC AUC
+
+        """
+        check_is_fitted(self, ['coef_'])
+        X = check_array(X)
+
+        preds = htools.mink_prod(X, self.coef_).ravel()
+
+        return preds
