@@ -50,10 +50,14 @@ class KGEvaluator(object):
         # representation functions for one arc from two embeddings of a node
         self.repr_fns = {
             "sum": lambda x, y: x + y,
-            "mean": lambda x, y: (x + y) / 2,
+            "mean": lambda x, y: (x + y) / 2.0,
             "mult": lambda x, y: x * y,
             "concat": lambda x, y: np.concatenate([x, y]),
             "diff": lambda x, y: x - y,
+            "mobius_sum": lambda x, y: htools.mobius_addition(x, y),
+            "mobius_diff": lambda x, y: htools.mobius_addition(x, -y),
+            "mobius_sum_mean": lambda x, y: htools.mobius_addition(x, y) / 2.0,
+            "mobius_diff_mean": lambda x, y: htools.mobius_addition(x, -y) / 2.0,
         }
 
 
@@ -70,7 +74,7 @@ class KGEvaluator(object):
         return E
 
 
-    def convert_data(self, f, E, binary_op="diff"):
+    def convert_data(self, f, E, binary_op="mobius_diff"):
         """read in `v1 v2 label` and train on <E(v1), E(v2)> = 1|0"""
 
         if binary_op not in self.repr_fns:
@@ -104,7 +108,8 @@ class KGEvaluator(object):
 
                 # if no embedding found that delete this example
                 try:
-                    emb = repr_fn(E[v1], E[v2])
+                    # project back to unit ball
+                    emb = htools.project_to_unitball(repr_fn(E[v1], E[v2]))
 
                     X[i] = emb
                     y[i] = int(label)
@@ -127,7 +132,7 @@ class KGEvaluator(object):
 
 
     def evaluate_params(self, emb_file, train_file, test_file, params,
-                        binary_op='diff', classifier_type='euc_svm'):
+                        binary_op='mobius_diff', classifier_type='euc_svm'):
         """
         Evaluate takes a callable for file names, hyperparameter dictionary, the
         representation type of the embedding, and the classifier type. It will then
@@ -235,7 +240,8 @@ class KGEvaluator(object):
 @click.option('--lr', type=float, default=0.01)
 @click.option('--batch-size', type=int, default=32)
 @click.option('--pretrained', is_flag=True, default=False)
-def main(emb_path, tr_path, te_path, c, epochs, lr, batch_size, pretrained):
+@click.option("--binary-op", default='concat', type=click.Choice(["concat", "mean", "sum", "mult", "diff", "mobius_sum", "mobius_diff", "mobius_sum_mean", "mobius_diff_mean"]))
+def main(emb_path, tr_path, te_path, c, epochs, lr, batch_size, pretrained, binary_op):
     """
     Args:
         emb_path - path to embedding file
@@ -249,7 +255,8 @@ def main(emb_path, tr_path, te_path, c, epochs, lr, batch_size, pretrained):
         'pretrained': pretrained,
     }
     my_evaluator = KGEvaluator()
-    my_evaluator.evaluate_params(emb_path, tr_path, te_path, params)
+    my_evaluator.evaluate_params(emb_path, tr_path, te_path, params, 
+                                 binary_op=binary_op)
 
 
 if __name__ == '__main__':

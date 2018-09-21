@@ -18,6 +18,12 @@ logger = logging.getLogger(__name__)
 import numpy as np
 import torch
 
+
+# =================
+# HYPERBOLOID MODEL
+# =================
+
+
 def mink_prod(x, y):
     """
     (x,y) -> x1*y1 - sum(x2y2, ..., xnyn)
@@ -118,3 +124,36 @@ def project_weight(w, alpha, ep=1e-5):
     new_w[0] = np.sqrt(np.sum((new_w[1:] - ep)**2))
 
     return new_w
+
+
+# =============
+# POINCARE BALL
+# =============
+
+def mobius_addition(x, y, c=1.0):
+    """
+    Mobius addition in the poincare ball model
+
+    """
+    xx = np.sum(x*x)
+    yy = np.sum(y*y)
+    xy = np.sum(x*y)
+
+    numerator = (1 + 2*c*xy + c*yy)*x + (1 - c*xx)*y
+    denominator = 1 + 2*c*xy + c*c*xx*yy
+
+    return numerator/denominator
+
+
+def project_to_unitball(x, eps=1e-5):
+    """
+    If norm of x > 1, then you need to bring it back to the poincare ball
+
+    """
+    if np.sum(x*x) < 1:
+        return x
+
+    x_norm = np.sqrt(np.sum(x*x))
+    x = x/x_norm - eps
+
+    return project_to_unitball(x)
