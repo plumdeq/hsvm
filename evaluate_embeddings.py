@@ -109,7 +109,9 @@ class KGEvaluator(object):
                 # if no embedding found that delete this example
                 try:
                     # project back to unit ball
-                    emb = htools.project_to_unitball(repr_fn(E[v1], E[v2]))
+                    emb_v1 = htools.project_to_unitball(E[v1])
+                    emb_v2 = htools.project_to_unitball(E[v2])
+                    emb = repr_fn(emb_v1, emb_v2)
 
                     X[i] = emb
                     y[i] = int(label)
