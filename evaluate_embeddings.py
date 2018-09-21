@@ -39,6 +39,7 @@ import torch.optim as optim
 from model import HSVM
 import htools
 import hsvm
+import train
 
 
 class KGEvaluator(object):
@@ -52,6 +53,7 @@ class KGEvaluator(object):
             "mean": lambda x, y: (x + y) / 2,
             "mult": lambda x, y: x * y,
             "concat": lambda x, y: np.concatenate([x, y]),
+            "diff": lambda x, y: x - y,
         }
 
 
@@ -68,7 +70,7 @@ class KGEvaluator(object):
         return E
 
 
-    def convert_data(self, f, E, binary_op="concat"):
+    def convert_data(self, f, E, binary_op="diff"):
         """read in `v1 v2 label` and train on <E(v1), E(v2)> = 1|0"""
 
         if binary_op not in self.repr_fns:
@@ -125,7 +127,7 @@ class KGEvaluator(object):
 
 
     def evaluate_params(self, emb_file, train_file, test_file, params,
-                        binary_op='concat', classifier_type='euc_svm'):
+                        binary_op='diff', classifier_type='euc_svm'):
         """
         Evaluate takes a callable for file names, hyperparameter dictionary, the
         representation type of the embedding, and the classifier type. It will then
@@ -198,6 +200,8 @@ class KGEvaluator(object):
         te_auc = roc_auc_score(Y_te, euc_SVM.decision_function(X_te))
         logger.info('test accuracy {}, ROC AUC {}'.format(te_score, te_auc))
 
+        train.visualize(X_te, Y_te, euc_SVM.coef_.ravel())
+
 
     def eval_hyper_svm(self, data, params):
         """
@@ -217,6 +221,9 @@ class KGEvaluator(object):
         te_score = hyp_SVM.score(X_te, Y_te)
         te_auc = roc_auc_score(Y_te, hyp_SVM.decision_function(X_te))
         logger.info('test accuracy {}, ROC AUC {}'.format(te_score, te_auc))
+
+        X_te_ball = htools.loid2ball(X_te)
+        train.visualize_loid(X_te_ball, Y_te, hyp_SVM.coef_.ravel())
 
 
 @click.command()
