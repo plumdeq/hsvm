@@ -65,37 +65,34 @@ def get_ball_data(loid=True):
 
     Y[np.where(Y == 0)] = -1
 
-    logger.info('cls 1 {}, cls 2 {}'.format(sum(Y == -1), 
-                                            sum(Y == 1)))
+    logger.info('neg cls {}, pos cls {}'.format(sum(Y == -1), sum(Y == 1)))
 
     X = (X - X.mean())/X.std() 
     # X[np.where(Y == -1)] = X[np.where(Y == 1)] * -1.0
-    norms = np.sqrt(np.sum(X**2, 1))
-    ball_ixs = norms < 1
+    norms_sq = np.sum(X**2, 1)
+    ball_ixs = norms_sq < 1
     logger.info('{} points inside poincare ball'.format(sum(ball_ixs)))
 
     X, Y = X[ball_ixs], Y[ball_ixs]
 
-    logger.info('cls 1 {}, cls 2 {}'.format(sum(Y == -1), 
-                                            sum(Y == 1)))
+    logger.info('neg cls {}, pos cls {}'.format(sum(Y == -1), sum(Y == 1)))
 
     return X, Y
 
 
-def get_gaussian_data(path, label1=1, label2=2):
+def get_gaussian_data(path, label_pos=1):
     """Load data from matlab files"""
     data = sp.io.loadmat(path)
-    X_orig, Y_orig = data['B'], data['label'].ravel().astype(np.int)
+    X, Y = data['B'], data['label'].ravel().astype(np.int)
 
-    X = X_orig[np.where((Y_orig == label1) | (Y_orig == label2))]
-    Y = Y_orig[np.where((Y_orig == label1) | (Y_orig == label2))]
+    # X = X_orig[np.where((Y_orig == label1) | (Y_orig == label2))]
+    # Y = Y_orig[np.where((Y_orig == label1) | (Y_orig == label2))]
 
-    Y[Y == label1] = 1
-    Y[Y == label2] = -1
+    Y[Y == label_pos] = 1
+    Y[Y != label_pos] = -1
     # X = (X - X.mean())/X.std() 
 
-    logger.info('cls 1 {}, cls 2 {}'.format(sum(Y == -1), 
-                                            sum(Y == 1)))
+    logger.info('neg cls {}, pos cls {}'.format(sum(Y == -1), sum(Y == 1)))
 
     # norms = np.sqrt(np.sum(X**2, 1))
     # ball_ixs = norms < 1
@@ -346,7 +343,8 @@ def old_main(path, c, epoch, lr, batch_size):
 @click.option('--lr', type=float, default=0.01)
 @click.option('--batch-size', type=int, default=16)
 @click.option('--pretrained', is_flag=True, default=False)
-def main(path, c, epochs, lr, batch_size, pretrained):
+@click.option('--label-pos', type=int, default=1, help='Positive label')
+def main(path, c, epochs, lr, batch_size, pretrained, label_pos):
     params = {
         'C': c,
         'epochs': epochs,
@@ -358,24 +356,24 @@ def main(path, c, epochs, lr, batch_size, pretrained):
     logger.info('params {}'.format(params))
 
     # X, Y = get_ball_data()
-    X, Y = get_gaussian_data(path, label1=3, label2=2)
+    X, Y = get_gaussian_data(path, label_pos=label_pos)
     X_loid = htools.ball2loid(X)
     logger.info('converting from ball to loid {} -> {}'.format(X.shape, X_loid.shape))
     
     logger.info('logistic regression')
     log_regr = LogisticRegression(max_iter=epochs)
-    scores = cross_val_score(log_regr, X, Y, scoring='accuracy')
-    logger.info('{}'.format(scores))
+    scores = cross_val_score(log_regr, X, Y, scoring='roc_auc')
+    logger.info('ROC AUC: {:.2f} +/- {:.2f} ({})'.format(np.mean(scores), np.std(scores), scores))
     logger.info('euclidean linear SVM')
     euc_SVM = LinearSVC(C=c, max_iter=epochs)
-    scores = cross_val_score(euc_SVM, X, Y, scoring='accuracy')
-    logger.info('{}'.format(scores))
+    scores = cross_val_score(euc_SVM, X, Y, scoring='roc_auc')
+    logger.info('ROC AUC: {:.2f} +/- {:.2f} ({})'.format(np.mean(scores), np.std(scores), scores))
     euc_SVM.fit(X, Y)
     visualize(X, Y, euc_SVM.coef_.ravel())
     logger.info('hyperbolic linear SVM')
     hyp_SVM = hsvm.LinearHSVM(**params)
-    scores = cross_val_score(hyp_SVM, X_loid, Y, scoring='accuracy')
-    logger.info('{}'.format(scores))
+    scores = cross_val_score(hyp_SVM, X_loid, Y, scoring='roc_auc')
+    logger.info('ROC AUC: {:.2f} +/- {:.2f} ({})'.format(np.mean(scores), np.std(scores), scores))
     hyp_SVM.fit(X_loid, Y)
     visualize_loid(X, Y, hyp_SVM.coef_.ravel())
 
