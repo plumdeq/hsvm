@@ -64,6 +64,20 @@ def ball2loid(b):
     return res
 
 
+def loid_dist(x, y, from_ball=True):
+    """
+    Hyperbolic distance between x and y. We compute it in the hyperboloid
+    model, thus convert to loid from ball, if coordinates are in ball
+
+    """
+    if from_ball:
+        # should be in batch x dims 
+        x = ball2loid(x.reshape(1, -1))
+        y = ball2loid(y.reshape(1, -1))
+
+    return np.arccosh(mink_prod(x, y).ravel().item())
+
+
 def loid2ball(l):
     """
     Convert hyperboloid coordinates to poincare ball
@@ -157,3 +171,14 @@ def project_to_unitball(x, eps=1e-5):
     x = x/x_norm - eps
 
     return project_to_unitball(x)
+
+
+def ball_dist(x, y):
+    xx = np.sum(x*x)
+    yy = np.sum(y*y)
+    x_minus_y = x - y
+    x_minus_y2 = np.sum(x_minus_y*x_minus_y)
+
+    arg = 2*(x_minus_y2)/((1 - xx)*(1 - yy))
+
+    return np.arccosh(1 + arg)

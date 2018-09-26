@@ -134,7 +134,8 @@ class KGEvaluator(object):
 
 
     def evaluate_params(self, emb_file, train_file, test_file, params,
-                        binary_op='mobius_diff', classifier_type='euc_svm'):
+                        binary_op='mobius_diff', classifier_type='euc_svm',
+                        visualize=True):
         """
         Evaluate takes a callable for file names, hyperparameter dictionary, the
         representation type of the embedding, and the classifier type. It will then
@@ -155,10 +156,10 @@ class KGEvaluator(object):
             data_loid = (htools.ball2loid(X_tr), htools.ball2loid(X_te), y_tr, y_te)
 
             logger.info('euclidean SVM')
-            self.eval_euc_svm(data, params)
+            self.eval_euc_svm(data, params, visualize=visualize)
 
             logger.info('hyperbolic SVM')
-            self.eval_hyper_svm(data_loid, params)
+            self.eval_hyper_svm(data_loid, params, visualize=visualize)
 
 
             # elif classifier_type == "mlp": 
@@ -191,7 +192,7 @@ class KGEvaluator(object):
         # }
 
 
-    def eval_euc_svm(self, data, params):
+    def eval_euc_svm(self, data, params, visualize=True):
         """Evaluate euclidean SVM on given data"""
         X_tr, X_te, Y_tr, Y_te = data
         Y_tr[Y_tr == 0] = -1.0
@@ -199,18 +200,20 @@ class KGEvaluator(object):
 
         logger.info('CV on train data')
         euc_SVM = LinearSVC(C=params['C'], max_iter=params['epochs'])
-        scores = cross_val_score(euc_SVM, X_tr, Y_tr, scoring='accuracy')
-        logger.info('{}'.format(scores))
+        scores = cross_val_score(euc_SVM, X_tr, Y_tr, scoring='roc_auc')
+        logger.info('Train ROC AUC: {:.2f} +/- {:.2f} ({})'.format(np.mean(scores), np.std(scores), scores))
 
+        euc_SVM = LinearSVC(C=params['C'], max_iter=params['epochs'])
         euc_SVM.fit(X_tr, Y_tr)
         te_score = euc_SVM.score(X_te, Y_te)
         te_auc = roc_auc_score(Y_te, euc_SVM.decision_function(X_te))
         logger.info('test accuracy {}, ROC AUC {}'.format(te_score, te_auc))
 
-        train.visualize(X_te, Y_te, euc_SVM.coef_.ravel())
+        if visualize:
+            train.visualize(X_te, Y_te, euc_SVM.coef_.ravel())
 
 
-    def eval_hyper_svm(self, data, params):
+    def eval_hyper_svm(self, data, params, visualize=True):
         """
         Train SVM in Hyperbolic space. We run manually stochastic gradient descent
 
@@ -221,16 +224,18 @@ class KGEvaluator(object):
 
         logger.info('CV on train data')
         hyp_SVM = hsvm.LinearHSVM(**params)
-        scores = cross_val_score(hyp_SVM, X_tr, Y_tr, scoring='accuracy')
-        logger.info('{}'.format(scores))
+        scores = cross_val_score(hyp_SVM, X_tr, Y_tr, scoring='roc_auc')
+        logger.info('Train ROC AUC: {:.2f} +/- {:.2f} ({})'.format(np.mean(scores), np.std(scores), scores))
 
+        hyp_SVM = hsvm.LinearHSVM(**params)
         hyp_SVM.fit(X_tr, Y_tr)
         te_score = hyp_SVM.score(X_te, Y_te)
         te_auc = roc_auc_score(Y_te, hyp_SVM.decision_function(X_te))
         logger.info('test accuracy {}, ROC AUC {}'.format(te_score, te_auc))
 
-        X_te_ball = htools.loid2ball(X_te)
-        train.visualize_loid(X_te_ball, Y_te, hyp_SVM.coef_.ravel())
+        if visualize:
+            X_te_ball = htools.loid2ball(X_te)
+            train.visualize_loid(X_te_ball, Y_te, hyp_SVM.coef_.ravel())
 
 
 @click.command()
@@ -243,7 +248,9 @@ class KGEvaluator(object):
 @click.option('--batch-size', type=int, default=32)
 @click.option('--pretrained', is_flag=True, default=False)
 @click.option("--binary-op", default='concat', type=click.Choice(["concat", "mean", "sum", "mult", "diff", "mobius_sum", "mobius_diff", "mobius_sum_mean", "mobius_diff_mean"]))
-def main(emb_path, tr_path, te_path, c, epochs, lr, batch_size, pretrained, binary_op):
+@click.option("--visualize", is_flag=True, default=False)
+def main(emb_path, tr_path, te_path, c, epochs, lr, batch_size, pretrained,
+         binary_op, visualize):
     """
     Args:
         emb_path - path to embedding file
@@ -258,7 +265,7 @@ def main(emb_path, tr_path, te_path, c, epochs, lr, batch_size, pretrained, bina
     }
     my_evaluator = KGEvaluator()
     my_evaluator.evaluate_params(emb_path, tr_path, te_path, params, 
-                                 binary_op=binary_op)
+                                 binary_op=binary_op, visualize=visualize)
 
 
 if __name__ == '__main__':
