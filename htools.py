@@ -57,7 +57,7 @@ def ball2loid(b):
     x0 = x0.reshape(-1, 1)
     bx0 = b * (x0+1)
 
-    res = np.empty((bx0.shape[0], bx0.shape[1]+1))
+    res = np.empty((bx0.shape[0], bx0.shape[1]+1), dtype=np.float64)
     res[:, 0] = x0.ravel()
     res[:, 1:] = bx0
 
@@ -182,3 +182,15 @@ def ball_dist(x, y):
     arg = 2*(x_minus_y2)/((1 - xx)*(1 - yy))
 
     return np.arccosh(1 + arg)
+
+
+def poincare_metric(x):
+    """
+    Poincare metric of x, i.e., inner product of x. x shape should be  1 x d
+
+    """
+    x_new = x.copy().reshape(1, -1)
+    euc_inner = np.sum(x_new**2)
+    conformal_factor = 2 / (1 - euc_inner)
+
+    return conformal_factor**2 * euc_inner

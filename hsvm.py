@@ -56,7 +56,7 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
             self.coef_ = self.linsvm_.coef_
             self.intercept_ = self.linsvm_.intercept_
         else:
-            self.coef_ = np.random.randn(1, X.shape[-1])
+            self.coef_ = self.init_weight(X.shape[-1])
             self.intercept_ = 0.0
 
         # train HSVM
@@ -65,6 +65,25 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
         self.classes_ = unique_labels(y)
 
         return self
+
+
+    def init_weight(self, dim):
+        """
+        Find a proper initialization for the weight vector, project it if
+        needed
+
+        """
+        w = np.random.randn(1, dim)
+
+        if not htools.is_feasible(w):
+            res = sp.optimize.minimize_scalar(
+                lambda alpha: np.sum((htools.project_weight(w, alpha) - w)**2))
+            alpha = res.x
+            w = htools.project_weight(w, alpha)
+
+            assert htools.is_feasible(w)
+
+        return w
 
 
     def hyper_train(self, X, Y):

@@ -97,7 +97,7 @@ class KGEvaluator(object):
 
             # adjust array size to the representation type
             d = size if binary_op != "concat" else size*2
-            X = np.zeros((N, d)) 
+            X = np.zeros((N, d), dtype=np.float64) 
             y = np.ones(N).astype(np.int)
 
             # collect how many missing embeddings we get
@@ -109,9 +109,9 @@ class KGEvaluator(object):
                 # if no embedding found that delete this example
                 try:
                     # project back to unit ball
-                    emb_v1 = htools.project_to_unitball(E[v1])
-                    emb_v2 = htools.project_to_unitball(E[v2])
-                    emb = repr_fn(emb_v1, emb_v2)
+                    emb_v1 = htools.project_to_unitball(E[v1]).astype(np.float64)
+                    emb_v2 = htools.project_to_unitball(E[v2]).astype(np.float64)
+                    emb = repr_fn(emb_v1, emb_v2).astype(np.float64)
 
                     X[i] = emb
                     y[i] = int(label)
