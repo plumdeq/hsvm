@@ -16,6 +16,7 @@ logger = logging.getLogger(__name__)
 
 # Third-party imports
 import numpy as np
+import scipy as sp
 import torch
 
 
@@ -161,7 +162,8 @@ def mobius_addition(x, y, c=1.0):
 
 def project_to_unitball(x, eps=1e-5):
     """
-    If norm of x > 1, then you need to bring it back to the poincare ball
+    If norm of x > 1, then you need to bring it back to the poincare ball. If
+    `optimize=False` then project recursively
 
     """
     if np.sum(x*x) < 1:
@@ -170,7 +172,7 @@ def project_to_unitball(x, eps=1e-5):
     x_norm = np.sqrt(np.sum(x*x))
     x = x/x_norm - eps
 
-    return project_to_unitball(x)
+    return x
 
 
 def ball_dist(x, y):

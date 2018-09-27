@@ -33,7 +33,8 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
 
     """
     def __init__(self, C=1.0, epochs=1000, lr=0.001, batch_size=16,
-                 pretrained=True, fit_intercept=False):
+                 loss_patience=10, pretrained=True, fit_intercept=False,
+                 reduce_lr_step=5.0):
         args_dict = locals()
 
         for name, val in args_dict.items():
@@ -98,6 +99,8 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
         epochs = self.epochs
         batch_size = self.batch_size
         not_feasible_counter = 0
+        best_loss = np.finfo(np.float32).max
+        patience_counter = 0
 
         for e in range(epochs):
             perm = np.arange(N)
@@ -124,6 +127,18 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
                 obj = htools.obj_fn(w, x, y, C)
                 
                 sum_loss += obj.item()
+
+            # record best loss
+            sum_loss /= N
+            if sum_loss < best_loss:
+                best_loss = sum_loss
+            else:
+                patience_counter += 1
+                if patience_counter == self.loss_patience:
+                    old_lr = lr
+                    lr = lr / self.reduce_lr_step
+                    logger.info('train loss does not improve, lowering lr {} > {}'.format(
+                        old_lr, lr))
 
             logger.debug('loss {}'.format(sum_loss))
 

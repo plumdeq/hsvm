@@ -28,7 +28,7 @@ import scipy as sp
 import scipy.optimize
 #
 from sklearn.metrics import roc_auc_score
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, GridSearchCV
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
 #
@@ -198,19 +198,32 @@ class KGEvaluator(object):
         Y_tr[Y_tr == 0] = -1.0
         Y_te[Y_te == 0] = -1.0
 
-        logger.info('CV on train data')
-        euc_SVM = LinearSVC(C=params['C'], max_iter=params['epochs'])
-        scores = cross_val_score(euc_SVM, X_tr, Y_tr, scoring='roc_auc')
-        logger.info('Train ROC AUC: {:.2f} +/- {:.2f} ({})'.format(np.mean(scores), np.std(scores), scores))
+        # logger.info('CV on train data')
+        # euc_SVM = LinearSVC(C=params['C'], max_iter=params['epochs'])
+        # scores = cross_val_score(euc_SVM, X_tr, Y_tr, scoring='roc_auc')
+        # logger.info('Train ROC AUC: {:.2f} +/- {:.2f} ({})'.format(np.mean(scores), np.std(scores), scores))
 
-        euc_SVM = LinearSVC(C=params['C'], max_iter=params['epochs'])
-        euc_SVM.fit(X_tr, Y_tr)
-        te_score = euc_SVM.score(X_te, Y_te)
-        te_auc = roc_auc_score(Y_te, euc_SVM.decision_function(X_te))
-        logger.info('test accuracy {}, ROC AUC {}'.format(te_score, te_auc))
+        # euc_SVM = LinearSVC(C=params['C'], max_iter=params['epochs'])
+        # euc_SVM.fit(X_tr, Y_tr)
+        # te_score = euc_SVM.score(X_te, Y_te)
+        # te_auc = roc_auc_score(Y_te, euc_SVM.decision_function(X_te))
+        # logger.info('test accuracy {}, ROC AUC {}'.format(te_score, te_auc))
+
+        logger.info('(euc svm) grid search hyperparameter tunning')
+        param_grid = { 'C': [0.1, 1, 10] }
+        clf = GridSearchCV(estimator=LinearSVC(max_iter=params['epochs']), 
+                           param_grid=param_grid, 
+                           scoring='roc_auc', n_jobs=-1)
+        clf.fit(X_tr, Y_tr)
+        logger.info('(train) best roc auc: {:.3f}, best params_ {}'.format(
+            clf.best_score_, clf.best_params_))
+
+        roc_auc_te = clf.score(X_te, Y_te)
+        roc_auc_te2 = roc_auc_score(Y_te, clf.decision_function(X_te))
+        logger.info('(test) roc auc: {:.3f} ({:.3f})'.format(roc_auc_te, roc_auc_te2))
 
         if visualize:
-            train.visualize(X_te, Y_te, euc_SVM.coef_.ravel())
+            train.visualize(X_te, Y_te, clf.best_estimator_.coef_.ravel())
 
 
     def eval_hyper_svm(self, data, params, visualize=True):
@@ -222,20 +235,37 @@ class KGEvaluator(object):
         Y_tr[Y_tr == 0] = -1.0
         Y_te[Y_te == 0] = -1.0
 
-        logger.info('CV on train data')
-        hyp_SVM = hsvm.LinearHSVM(**params)
-        scores = cross_val_score(hyp_SVM, X_tr, Y_tr, scoring='roc_auc')
-        logger.info('Train ROC AUC: {:.2f} +/- {:.2f} ({})'.format(np.mean(scores), np.std(scores), scores))
+        # logger.info('CV on train data')
+        # hyp_SVM = hsvm.LinearHSVM(**params)
+        # scores = cross_val_score(hyp_SVM, X_tr, Y_tr, scoring='roc_auc')
+        # logger.info('Train ROC AUC: {:.2f} +/- {:.2f} ({})'.format(np.mean(scores), np.std(scores), scores))
 
-        hyp_SVM = hsvm.LinearHSVM(**params)
-        hyp_SVM.fit(X_tr, Y_tr)
-        te_score = hyp_SVM.score(X_te, Y_te)
-        te_auc = roc_auc_score(Y_te, hyp_SVM.decision_function(X_te))
-        logger.info('test accuracy {}, ROC AUC {}'.format(te_score, te_auc))
+        # hyp_SVM = hsvm.LinearHSVM(**params)
+        # hyp_SVM.fit(X_tr, Y_tr)
+        # te_score = hyp_SVM.score(X_te, Y_te)
+        # te_auc = roc_auc_score(Y_te, hyp_SVM.decision_function(X_te))
+        # logger.info('test accuracy {}, ROC AUC {}'.format(te_score, te_auc))
+
+        logger.info('(hyp svm) grid search hyperparameter tunning')
+        param_grid = { 
+            'C': [0.1, 1, 10], 
+            'batch_size': [16, 32, 64], 
+            'epochs': [100, 500],
+            'lr': [0.1, 0.01, 0.001],
+            'pretrained': [False, True],
+            }
+        clf = GridSearchCV(estimator=hsvm.LinearHSVM(**params), param_grid=param_grid, 
+                           scoring='roc_auc', n_jobs=-1)
+        clf.fit(X_tr, Y_tr)
+        logger.info('(train) best roc auc: {:.3f}, best params_ {}'.format(
+            clf.best_score_, clf.best_params_))
+
+        roc_auc_te = clf.score(X_te, Y_te)
+        logger.info('(test) roc auc: {:.3f}'.format(roc_auc_te))
 
         if visualize:
             X_te_ball = htools.loid2ball(X_te)
-            train.visualize_loid(X_te_ball, Y_te, hyp_SVM.coef_.ravel())
+            train.visualize_loid(X_te_ball, Y_te, clf.best_estimator_.coef_.ravel())
 
 
 @click.command()
