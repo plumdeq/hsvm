@@ -136,8 +136,9 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
             else:
                 lr_patience_counter += 1
                 early_stopping_patience_counter += 1
-                if patience_counter == self.loss_patience and lr > self.min_lr:
-                    patience_counter = 0
+                if lr_patience_counter == self.lr_patience and lr > self.min_lr:
+                    early_stopping_patience_counter = 0
+                    lr_patience_counter = 0
                     old_lr = lr
                     lr = lr / self.reduce_lr_step
                     logger.info('train loss does not improve, lowering lr {} > {}'.format(
