@@ -33,8 +33,8 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
 
     """
     def __init__(self, C=1.0, epochs=1000, lr=0.001, batch_size=16,
-                 loss_patience=10, pretrained=True, fit_intercept=False,
-                 reduce_lr_step=5.0):
+                 lr_patience=10, pretrained=True, fit_intercept=False,
+                 early_stopping_patience=50, reduce_lr_step=2.0, min_lr = 1e-5):
         args_dict = locals()
 
         for name, val in args_dict.items():
@@ -100,7 +100,8 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
         batch_size = self.batch_size
         not_feasible_counter = 0
         best_loss = np.finfo(np.float32).max
-        patience_counter = 0
+        lr_patience_counter = 0
+        early_stopping_patience_counter = 0
 
         for e in range(epochs):
             perm = np.arange(N)
@@ -133,12 +134,19 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
             if sum_loss < best_loss:
                 best_loss = sum_loss
             else:
-                patience_counter += 1
-                if patience_counter == self.loss_patience:
+                lr_patience_counter += 1
+                early_stopping_patience_counter += 1
+                if patience_counter == self.loss_patience and lr > self.min_lr:
+                    patience_counter = 0
                     old_lr = lr
                     lr = lr / self.reduce_lr_step
                     logger.info('train loss does not improve, lowering lr {} > {}'.format(
                         old_lr, lr))
+
+                if early_stopping_patience_counter == self.early_stopping_patience:
+                    logger.info('reached early stopping at epoch {}, no improvement in loss'.format(e))
+                    break
+
 
             logger.debug('loss {}'.format(sum_loss))
 

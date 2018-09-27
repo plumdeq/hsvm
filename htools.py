@@ -46,7 +46,7 @@ def mink_prod(x, y):
     mink_x = x.copy()
     mink_x[:, 1:] = -mink_x[:, 1:]
 
-    return np.sum(mink_x * y, 1).reshape(-1, 1)
+    return np.sum(np.float64(mink_x) * np.float64(y), 1).reshape(-1, 1)
 
 
 def ball2loid(b):
@@ -108,12 +108,12 @@ def grad_fn(w, x, y, C):
 
     w_grad_margin = w.copy()
     w_grad_margin[0] = -1. * w_grad_margin[0]
-    z = y * mink_prod(x, w)
+    z = y * mink_prod(np.float64(x), np.float64(w))
     missed = (np.arcsinh(1) -np.arcsinh(z)) > 0
     x_grad_misclass = x
     x_grad_misclass[:, 1:] = -1. * x_grad_misclass[:, 1:]
 
-    w_grad_misclass = missed * -(1. / np.sqrt(1 + z**2)) * y  * x_grad_misclass
+    w_grad_misclass = missed * -(1. / np.sqrt(1 + np.float64(z)**2)) * y  * x_grad_misclass
 
     w_grad = w_grad_margin + C * np.sum(w_grad_misclass, 0)
 
