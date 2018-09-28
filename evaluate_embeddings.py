@@ -15,6 +15,7 @@ Read in embeddings, train EucSVM and HSVM, compare evaluation results
 # Standard-library imports
 import logging
 import random
+import pickle
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -40,6 +41,7 @@ from model import HSVM
 import htools
 import hsvm
 import train
+import config
 
 
 class KGEvaluator(object):
@@ -133,7 +135,7 @@ class KGEvaluator(object):
         return X, y, missing_ratio
 
 
-    def evaluate_params(self, emb_file, train_file, test_file, params,
+    def evaluate_params(self, emb_file, train_file, test_file, 
                         binary_op='mobius_diff', classifier_type='euc_svm',
                         visualize=True):
         """
@@ -145,6 +147,8 @@ class KGEvaluator(object):
         scores = None
         tr_miss_ratio, te_miss_ratio = np.nan, np.nan
         E = self.get_embeddings(emb_file)
+        euc_score = {}
+        hyp_score = {}
 
         try:
             X_tr, y_tr, tr_miss_ratio = self.convert_data(train_file, E, binary_op=binary_op) 
@@ -156,10 +160,10 @@ class KGEvaluator(object):
             data_loid = (htools.ball2loid(X_tr), htools.ball2loid(X_te), y_tr, y_te)
 
             logger.info('euclidean SVM')
-            self.eval_euc_svm(data, params, visualize=visualize)
+            euc_score = self.eval_euc_svm(data, visualize=visualize)
 
             logger.info('hyperbolic SVM')
-            self.eval_hyper_svm(data_loid, params, visualize=visualize)
+            hyp_score = self.eval_hyper_svm(data_loid, visualize=visualize)
 
 
             # elif classifier_type == "mlp": 
@@ -178,6 +182,8 @@ class KGEvaluator(object):
                 "ROC AUC": np.nan,
             }
 
+        return euc_score, hyp_score
+
 
         # logger.info(",".join(["{}: {}".format(k,v) for k, v in params.items()]))
 
@@ -192,7 +198,7 @@ class KGEvaluator(object):
         # }
 
 
-    def eval_euc_svm(self, data, params, visualize=True):
+    def eval_euc_svm(self, data, visualize=True):
         """Evaluate euclidean SVM on given data"""
         X_tr, X_te, Y_tr, Y_te = data
         Y_tr[Y_tr == 0] = -1.0
@@ -209,24 +215,32 @@ class KGEvaluator(object):
         # te_auc = roc_auc_score(Y_te, euc_SVM.decision_function(X_te))
         # logger.info('test accuracy {}, ROC AUC {}'.format(te_score, te_auc))
 
+        res = {'algo': 'euc_svm'}
+
         logger.info('(euc svm) grid search hyperparameter tunning')
-        param_grid = { 'C': [0.1, 1, 10] }
-        clf = GridSearchCV(estimator=LinearSVC(max_iter=params['epochs']), 
+        param_grid = config.EUC_SVM_PARAM_GRID
+        clf = GridSearchCV(estimator=LinearSVC(), 
                            param_grid=param_grid, 
                            scoring='roc_auc', n_jobs=-1)
         clf.fit(X_tr, Y_tr)
         logger.info('(train) best roc auc: {:.3f}, best params_ {}'.format(
             clf.best_score_, clf.best_params_))
+        res['train_roc_auc'] = clf.best_score_
+        res['train_params'] = clf.best_params_
 
         roc_auc_te = clf.score(X_te, Y_te)
         roc_auc_te2 = roc_auc_score(Y_te, clf.decision_function(X_te))
         logger.info('(test) roc auc: {:.3f} ({:.3f})'.format(roc_auc_te, roc_auc_te2))
+        res['test_roc_auc'] = roc_auc_te
 
         if visualize:
             train.visualize(X_te, Y_te, clf.best_estimator_.coef_.ravel())
 
 
-    def eval_hyper_svm(self, data, params, visualize=True):
+        return res
+
+
+    def eval_hyper_svm(self, data, visualize=True):
         """
         Train SVM in Hyperbolic space. We run manually stochastic gradient descent
 
@@ -247,56 +261,64 @@ class KGEvaluator(object):
         # logger.info('test accuracy {}, ROC AUC {}'.format(te_score, te_auc))
 
         logger.info('(hyp svm) grid search hyperparameter tunning')
-        param_grid = { 
-            'C': [0.1, 1, 10], 
-            'batch_size': [16, 32, 64], 
-            'epochs': [100, 500],
-            'lr': [0.1, 0.01, 0.001],
-            'pretrained': [False, True],
-            }
-        clf = GridSearchCV(estimator=hsvm.LinearHSVM(**params), param_grid=param_grid, 
+        param_grid = config.HYP_SVM_PARAM_GRID
+
+        res = {'algo': 'hyp_svm'}
+
+        clf = GridSearchCV(estimator=hsvm.LinearHSVM(), param_grid=param_grid, 
                            scoring='roc_auc', n_jobs=-1)
         clf.fit(X_tr, Y_tr)
         logger.info('(train) best roc auc: {:.3f}, best params_ {}'.format(
             clf.best_score_, clf.best_params_))
+        res['train_roc_auc'] = clf.best_score_
+        res['train_params'] = clf.best_params_
 
         roc_auc_te = clf.score(X_te, Y_te)
         logger.info('(test) roc auc: {:.3f}'.format(roc_auc_te))
+        res['test_roc_auc'] = roc_auc_te
 
         if visualize:
             X_te_ball = htools.loid2ball(X_te)
             train.visualize_loid(X_te_ball, Y_te, clf.best_estimator_.coef_.ravel())
 
+        return res
+
 
 @click.command()
-@click.argument('emb_path', type=click.Path(exists=True))
-@click.argument('tr_path', type=click.Path(exists=True))
-@click.argument('te_path', type=click.Path(exists=True))
-@click.option('--c', type=float, default=1.0)
-@click.option('--epochs', type=int, default=100)
-@click.option('--lr', type=float, default=0.01)
-@click.option('--batch-size', type=int, default=32)
-@click.option('--pretrained', is_flag=True, default=False)
 @click.option("--binary-op", default='concat', type=click.Choice(["concat", "mean", "sum", "mult", "diff", "mobius_sum", "mobius_diff", "mobius_sum_mean", "mobius_diff_mean"]))
 @click.option("--visualize", is_flag=True, default=False)
-def main(emb_path, tr_path, te_path, c, epochs, lr, batch_size, pretrained,
-         binary_op, visualize):
+@click.option("--output", default='result.pkl')
+def main(binary_op, visualize, output):
     """
     Args:
         emb_path - path to embedding file
 
     """
-    params = {
-        'C': c,
-        'epochs': epochs,
-        'lr': lr,
-        'batch_size': batch_size,
-        'pretrained': pretrained,
-    }
-    my_evaluator = KGEvaluator()
-    my_evaluator.evaluate_params(emb_path, tr_path, te_path, params, 
-                                 binary_op=binary_op, visualize=visualize)
+    output = binary_op.replace(' ', '_') + '_' + output
 
+    euc_scores = []
+    hyp_scores = []
+
+    my_evaluator = KGEvaluator()
+
+    for conf_obj in config.data_generator():
+        logger.info(conf_obj)
+        emb_path, tr_path, te_path = conf_obj['emb_path'], conf_obj['tr_path'], conf_obj['te_path']
+        euc_score, hyp_score = my_evaluator.evaluate_params(emb_path, tr_path, te_path, 
+                                     binary_op=binary_op, visualize=visualize)
+
+        for obj_score in (euc_score, hyp_score):
+            for key in ('fold', 'relation', 'ratio', 'dim', 'epoch'):
+                obj_score[key] = conf_obj[key]
+
+        euc_scores.append(euc_score)
+        hyp_scores.append(hyp_score)
+
+    logger.info('pickling results to {}'.format(output))
+    with open(output, 'wb') as f:
+        obj = { 'euc': euc_scores, 'hyp': hyp_scores }
+        pickle.dump(obj, f)
+    
 
 if __name__ == '__main__':
     main()

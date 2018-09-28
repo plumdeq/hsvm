@@ -34,7 +34,7 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
     """
     def __init__(self, C=1.0, epochs=1000, lr=0.001, batch_size=16,
                  lr_patience=10, pretrained=True, fit_intercept=False,
-                 early_stopping_patience=50, reduce_lr_step=2.0, min_lr = 1e-5):
+                 early_stopping_patience=50, reduce_lr_step=5.0, min_lr = 1e-5):
         args_dict = locals()
 
         for name, val in args_dict.items():
