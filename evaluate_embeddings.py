@@ -285,23 +285,22 @@ class KGEvaluator(object):
 
 
 @click.command()
+@click.option("--ratio", default=80, type=int)
 @click.option("--binary-op", default='concat', type=click.Choice(["concat", "mean", "sum", "mult", "diff", "mobius_sum", "mobius_diff", "mobius_sum_mean", "mobius_diff_mean"]))
 @click.option("--visualize", is_flag=True, default=False)
-@click.option("--output", default='result.pkl')
-def main(binary_op, visualize, output):
+@click.option("--output", default='./result.pkl')
+def main(ratio, binary_op, visualize, output):
     """
     Args:
         emb_path - path to embedding file
 
     """
-    output = binary_op.replace(' ', '_') + '_' + output
-
     euc_scores = []
     hyp_scores = []
 
     my_evaluator = KGEvaluator()
 
-    for conf_obj in config.data_generator():
+    for conf_obj in config.data_generator(ratio=ratio):
         logger.info(conf_obj)
         emb_path, tr_path, te_path = conf_obj['emb_path'], conf_obj['tr_path'], conf_obj['te_path']
         euc_score, hyp_score = my_evaluator.evaluate_params(emb_path, tr_path, te_path, 
@@ -313,6 +312,11 @@ def main(binary_op, visualize, output):
 
         euc_scores.append(euc_score)
         hyp_scores.append(hyp_score)
+
+    output_dir = os.path.dirname(os.path.abspath(output))
+    if not os.path.exists(output_dir):
+        logger.info("creating directory {} (did not exist before)".format(output_dir))
+        os.makedirs(output_dir)
 
     logger.info('pickling results to {}'.format(output))
     with open(output, 'wb') as f:
