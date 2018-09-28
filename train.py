@@ -25,6 +25,7 @@ import numpy as np
 import scipy as sp
 import scipy.optimize
 import scipy.io
+from numba import jit
 import torch
 import torch.optim as optim
 import click
@@ -164,6 +165,7 @@ def project_weight(w, alpha, ep=1e-5):
 
 
 
+@jit(nopython=True, parallel=True)
 def hyper_train(X, Y, params):
     """
     Train SVM in Hyperbolic space. We run manually stochastic gradient descent

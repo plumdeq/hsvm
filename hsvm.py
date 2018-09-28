@@ -8,6 +8,7 @@ Scikit-learn compatible classifier for Hyperbolic SVM
 # Standard-library imports
 import random
 import logging
+import functools as fun
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,9 +23,81 @@ from sklearn.utils.validation import check_X_y, check_array, check_is_fitted
 from sklearn.utils.multiclass import unique_labels
 from sklearn.svm import LinearSVC
 from sklearn.metrics import roc_auc_score
+from numba import jit
 
 # Cross-library imports
 import htools
+
+
+@jit(parallel=True)
+def optimize_w(w, alpha):
+    return np.sum((htools.project_weight(w, alpha) - w)**2)
+
+
+# NUMBIZE
+@jit(parallel=True)
+def _hyper_train(X, Y, w, C=1.0, epochs=1000, lr=0.001, batch_size=16,
+                 lr_patience=10, early_stopping_patience=50, 
+                 reduce_lr_step=5.0, min_lr = 1e-5):
+    """
+    Train SVM in Hyperbolic space. We run manually stochastic gradient descent
+
+    """
+    N = len(Y)
+    not_feasible_counter = 0
+    best_loss = np.finfo(np.float32).max
+    lr_patience_counter = 0
+    early_stopping_patience_counter = 0
+
+    for e in range(epochs):
+        perm = np.arange(N)
+        random.shuffle(perm)
+        sum_loss = 0
+
+        for i in range(0, N, batch_size):
+            x = X[perm[i:i+batch_size]]
+            y = Y[perm[i:i+batch_size]]
+
+            grad = htools.grad_fn(w, x, y, C)
+            w = w - lr * grad
+
+            if not htools.is_feasible(w):
+                not_feasible_counter += 1
+                # logger.debug('not feasible ({} times)'.format(not_feasible_counter))
+                func_to_optimize = fun.partial(optimize_w, w)
+                res = sp.optimize.minimize_scalar(func_to_optimize) 
+                alpha = res.x
+                w = htools.project_weight(w, alpha)
+
+                assert htools.is_feasible(w)
+
+            obj = htools.obj_fn(w, x, y, C)
+            
+            sum_loss += obj.item()
+
+        # record best loss
+        sum_loss /= N
+        if sum_loss < best_loss:
+            best_loss = sum_loss
+        else:
+            lr_patience_counter += 1
+            early_stopping_patience_counter += 1
+            if lr_patience_counter == lr_patience and lr > min_lr:
+                early_stopping_patience_counter = 0
+                lr_patience_counter = 0
+                old_lr = lr
+                lr = lr / reduce_lr_step
+                # logger.info('train loss does not improve, lowering lr {} > {}'.format( old_lr, lr))
+
+            if early_stopping_patience_counter == early_stopping_patience:
+                # logger.info('reached early stopping at epoch {}, no improvement in loss'.format(e))
+                break
+
+
+        # logger.debug('loss {}'.format(sum_loss))
+
+    return w
+
 
 
 class LinearHSVM(BaseEstimator, LinearClassifierMixin):
@@ -87,7 +160,28 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
         return w
 
 
-    def hyper_train(self, X, Y):
+    def hyper_train(self, X, y):
+        """
+        Will use the numbized version
+
+        """
+        w = self.coef_
+        params = {}
+        params['lr'] = self.lr
+        params['C'] = self.C
+        params['epochs'] = self.epochs
+        params['batch_size'] = self.batch_size
+        params['lr_patience'] = self.lr_patience 
+        params['min_lr'] = self.min_lr
+        params['reduce_lr_step'] = self.reduce_lr_step
+        params['early_stopping_patience'] = self.early_stopping_patience
+
+        w = _hyper_train(X, y, w, **params)
+
+        return w
+
+
+    def hyper_train_old(self, X, Y):
         """
         Train SVM in Hyperbolic space. We run manually stochastic gradient descent
 
@@ -117,7 +211,7 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
 
                 if not htools.is_feasible(w):
                     not_feasible_counter += 1
-                    logger.debug('not feasible ({} times)'.format(not_feasible_counter))
+                    # logger.debug('not feasible ({} times)'.format(not_feasible_counter))
                     res = sp.optimize.minimize_scalar(
                         lambda alpha: np.sum((htools.project_weight(w, alpha) - w)**2))
                     alpha = res.x
@@ -141,15 +235,14 @@ class LinearHSVM(BaseEstimator, LinearClassifierMixin):
                     lr_patience_counter = 0
                     old_lr = lr
                     lr = lr / self.reduce_lr_step
-                    logger.info('train loss does not improve, lowering lr {} > {}'.format(
-                        old_lr, lr))
+                    # logger.info('train loss does not improve, lowering lr {} > {}'.format( old_lr, lr))
 
                 if early_stopping_patience_counter == self.early_stopping_patience:
-                    logger.info('reached early stopping at epoch {}, no improvement in loss'.format(e))
+                    # logger.info('reached early stopping at epoch {}, no improvement in loss'.format(e))
                     break
 
 
-            logger.debug('loss {}'.format(sum_loss))
+            # logger.debug('loss {}'.format(sum_loss))
 
         
         # y_true = Y.ravel()

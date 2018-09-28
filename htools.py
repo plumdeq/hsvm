@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 import numpy as np
 import scipy as sp
 import torch
+from numba import jit
 
 
 # =================
@@ -25,6 +26,7 @@ import torch
 # =================
 
 
+@jit(parallel=True)
 def mink_prod(x, y):
     """
     (x,y) -> x1*y1 - sum(x2y2, ..., xnyn)
@@ -103,6 +105,7 @@ def obj_fn(w, x, y, C):
     return obj.ravel()
 
 
+@jit(parallel=True)
 def grad_fn(w, x, y, C):
     if len(y.shape) < 2:
         y = y.reshape(-1, 1)
