@@ -13,6 +13,7 @@ Read in embeddings, train EucSVM and HSVM, compare evaluation results
 
 """
 # Standard-library imports
+import os
 import logging
 import random
 import pickle
