@@ -22,9 +22,6 @@ import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-VIZ_PARAMS = '/media/Warehouse/nips2018-rel_learning/bio-kg/viz_params.json'
-
-
 class Rel2Name():
     def __init__(self, viz_params_file):
         self.viz_params = None
@@ -51,7 +48,7 @@ class Rel2Name():
 
 @click.command()
 @click.argument('results_file', type=click.Path(exists=True))
-@click.option('--viz-params-file', type=click.Path(exists=True), default=VIZ_PARAMS)
+@click.argument('viz-params-file', type=click.Path(exists=True))
 def main(results_file, viz_params_file):
     res_obj = None
     rel2name = Rel2Name(viz_params_file)
@@ -99,12 +96,16 @@ def main(results_file, viz_params_file):
                     ax=axes[0])
     axes[0].plot([0.0, 1.0], [0.0, 1.0], '--', linewidth=0.5)
     axes[0].set_title('train performance')
+    axes[0].set_ylim([0.45, 1.1])
+    axes[0].set_xlim([0.45, 1.1])
 
     sns.scatterplot(euc_df.loc[x_sorted]['test_roc_auc'], 
                     hyp_df.loc[x_sorted]['test_roc_auc'], 
                     ax=axes[1])
     axes[1].plot([0.0, 1.0], [0.0, 1.0], '--', linewidth=0.5)
     axes[1].set_title('test performance')
+    axes[1].set_ylim([0.45, 1.1])
+    axes[1].set_xlim([0.45, 1.1])
 
     # for ax in axes:
     #     xticks = ax.get_xticklabels()
