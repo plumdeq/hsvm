@@ -79,6 +79,14 @@ def main(results_file, viz_params_file):
 
     euc_df = euc_df.sort_values('test_roc_auc')
     hyp_df = hyp_df.sort_values('test_roc_auc')
+
+    logger.info('Euc SVM')
+    logger.info('train roc auc {:.3f} +/- {:.3f}'.format(euc_df['train_roc_auc'].mean(), euc_df['train_roc_auc'].std()**2))
+    logger.info('test roc auc {:.3f} +/- {:.3f}'.format(euc_df['test_roc_auc'].mean(), euc_df['test_roc_auc'].std()**2))
+    logger.info('Hyp SVM')
+    logger.info('train roc auc {:.3f} +/- {:.3f}'.format(hyp_df['train_roc_auc'].mean(), hyp_df['train_roc_auc'].std()**2))
+    logger.info('test roc auc {:.3f} +/- {:.3f}'.format(hyp_df['test_roc_auc'].mean(), hyp_df['test_roc_auc'].std()**2))
+
     x_sorted = hyp_df.index
 
     fig, axes = plt.subplots(2, 1, sharey=True, sharex=True)
