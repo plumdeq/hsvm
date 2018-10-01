@@ -33,12 +33,18 @@ class Rel2Name():
 
         self.rel2idx = pd.read_csv(
                 self.viz_params['rel2idx'], sep='\t', index_col=0, header=None)
-        self.rel2name = pd.read_csv(
-                self.viz_params['rel2name'], sep=' ', index_col=0, header=None)
+
+        if self.viz_params['use_rel2name']:
+            self.rel2name = pd.read_csv(
+                    self.viz_params['rel2name'], sep=' ', index_col=0, header=None)
 
     def get_name(self, relix):
         long_name = self.rel2idx.loc[int(relix)].item()
-        short_name = self.rel2name.loc[long_name].item()
+
+        if self.viz_params['use_rel2name']:
+            short_name = self.rel2name.loc[long_name].item()
+        else:
+            short_name = long_name
 
         return short_name
 
@@ -61,16 +67,49 @@ def main(results_file, viz_params_file):
 
     df['relation'] = df['relation'].apply(rel2name.get_name)
 
-    fig, axes = plt.subplots(1, 2, sharey=True, sharex=True)
-    sns.barplot(x='relation', y='train_roc_auc', data=df, hue='algo', ax=axes[0], ci='sd')
+    if rel2name.viz_params['drop_na']:
+        df = df.dropna()
+
+    agg_df = df[['relation', 'train_roc_auc', 'test_roc_auc', 'algo']]\
+                .groupby(['algo', 'relation']).agg('mean').reset_index()
+    # flatten columns
+
+    # cols = [' '.join(c).strip() for c in agg_df.columns]
+    # agg_df.columns = cols
+    
+    euc_df = agg_df[agg_df['algo'] == 'euc_svm'].set_index('relation')
+    hyp_df = agg_df[agg_df['algo'] == 'hyp_svm'].set_index('relation')
+
+    euc_df = euc_df.sort_values('test_roc_auc')
+    hyp_df = hyp_df.sort_values('test_roc_auc')
+    x_sorted = hyp_df.index
+
+    fig, axes = plt.subplots(2, 1, sharey=True, sharex=True)
+    # sns.barplot(x='relation', y='train_roc_auc', data=df, hue='algo', ax=axes[0], ci='sd')
+    # sns.relplot(x=euc_df.loc[x_sorted]['train_roc_auc'], 
+    #             y=hyp_df.loc[x_sorted]['train_roc_auc'], ax=axes[0])
+    # axes[0].set_title('train performance')
+    # sns.barplot(x='relation', y='test_roc_auc', data=df, hue='algo', ax=axes[1], ci='sd')
+    # sns.relplot(x=euc_df.loc[x_sorted]['test_roc_auc'], 
+    #             y=hyp_df.loc[x_sorted]['test_roc_auc'], ax=axes[1])
+    # axes[1].set_title('test performance')
+
+    sns.scatterplot(euc_df.loc[x_sorted]['train_roc_auc'], 
+                    hyp_df.loc[x_sorted]['train_roc_auc'], 
+                    ax=axes[0])
+    axes[0].plot([0.0, 1.0], [0.0, 1.0], '--', linewidth=0.5)
     axes[0].set_title('train performance')
-    sns.barplot(x='relation', y='test_roc_auc', data=df, hue='algo', ax=axes[1], ci='sd')
+
+    sns.scatterplot(euc_df.loc[x_sorted]['test_roc_auc'], 
+                    hyp_df.loc[x_sorted]['test_roc_auc'], 
+                    ax=axes[1])
+    axes[1].plot([0.0, 1.0], [0.0, 1.0], '--', linewidth=0.5)
     axes[1].set_title('test performance')
 
-    for ax in axes:
-        xticks = ax.get_xticklabels()
-        for tick in xticks:
-            tick.set_rotation(60)
+    # for ax in axes:
+    #     xticks = ax.get_xticklabels()
+    #     for tick in xticks:
+    #         tick.set_rotation(60)
 
     plt.tight_layout()
     plt.show()
