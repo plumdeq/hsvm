@@ -13,6 +13,14 @@ adaptation of the official imlementation in Matlab `[2]`.
 * Integrates seemlessly with evaluation pipeline for knowledge graph embeddings
   as in `[3]`
 
+## Usage
+
+* `python3 train.py ./data/gaussian/data_002.mat --c 1`
+    * will train Euclidean and hyperbolic SVM on data generated with hyperbolic
+      Gaussian
+* see `--help` of `evaluate_embeddings.py, plot_results.py, train.py` for
+  further details
+
 ## Requirements
 
 see `requirements.txt`
