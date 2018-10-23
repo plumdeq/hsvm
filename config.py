@@ -14,16 +14,16 @@ import logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-PATH = "/media/Warehouse/nips2018-rel_learning/bio-kg"
+PATH = "/media/Warehouse/nips2018-rel_learning/umls"
 EXCLUDE_DIRS = ['space-separated']
-DIM = 2
+DIM = 10
 EPOCHS = 500
 
 EMB_GLOB = lambda fold, dim, epochs: 'global-train-fold-{}-dimension-{}*epochs-{}'.format(fold, dim, epochs)
 TR_GLOB = lambda fold: '*train_biased*fold-{}'.format(fold)
 TE_GLOB = lambda fold: '*test_biased*fold-{}'.format(fold)
 
-ratios = [20, 80]
+ratios = [80]
 folds = list(range(1, 11))
 
 confs = {}
