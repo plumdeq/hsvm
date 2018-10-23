@@ -17,6 +17,8 @@ adaptation of the official imlementation in Matlab `[2]`.
 
 see `requirements.txt`
 
+## References
+
 * [1] `https://arxiv.org/abs/1806.00437`
 * [2] `https://github.com/hhcho/hyplinear`
 * [3] `https://github.com/plumdeq/neuro-kglink`
