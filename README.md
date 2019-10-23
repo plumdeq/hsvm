@@ -27,8 +27,9 @@ see `requirements.txt`
 
 ## Citation
 
-If you use it and find useful please consider citing this paper
+If you use it and find useful please consider citing this paper https://www.aclweb.org/anthology/W19-5805/
 
+```
 @inproceedings{agibetov-etal-2019-using,
     title = "Using hyperbolic large-margin classifiers for biological link prediction",
     author = "Agibetov, Asan  and
@@ -42,8 +43,7 @@ If you use it and find useful please consider citing this paper
     url = "https://www.aclweb.org/anthology/W19-5805",
     pages = "26--30",
 }
-
-https://www.aclweb.org/anthology/W19-5805/
+```
 
 ## References
 
