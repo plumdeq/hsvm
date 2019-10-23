@@ -1,7 +1,7 @@
 # Hyperbolic SVM
 
 Python implementation of hyperbolic SVM, as introduced in `[1]`. This is a Python
-adaptation of the official imlementation in Matlab `[2]`. 
+adaptation of the official imlementation in Matlab `[2]`. This is the official code repository from this paper https://www.aclweb.org/anthology/W19-5805/ .
 
 ## Raison d'être
 
@@ -24,6 +24,26 @@ adaptation of the official imlementation in Matlab `[2]`.
 ## Requirements
 
 see `requirements.txt`
+
+## Citation
+
+If you use it and find useful please consider citing this paper
+
+@inproceedings{agibetov-etal-2019-using,
+    title = "Using hyperbolic large-margin classifiers for biological link prediction",
+    author = "Agibetov, Asan  and
+      Dorffner, Georg  and
+      Samwald, Matthias",
+    booktitle = "Proceedings of the 5th Workshop on Semantic Deep Learning (SemDeep-5)",
+    month = "12 " # aug,
+    year = "2019",
+    address = "Macau, China",
+    publisher = "Association for Computational Linguistics",
+    url = "https://www.aclweb.org/anthology/W19-5805",
+    pages = "26--30",
+}
+
+https://www.aclweb.org/anthology/W19-5805/
 
 ## References
 
